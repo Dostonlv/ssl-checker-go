@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"crypto/md5"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -29,12 +27,11 @@ type CertInfo struct {
 	CertSANs           []string
 	CertExpired        bool
 	CertValid          bool
-	ValidFrom          time.Time
-	ValidUntil         time.Time
+	ValidFrom          string
+	ValidUntil         string
 	ValidityDays       int
 	DaysLeft           int
 	ValidDaysToExpire  int
-	HSTSHeaderEnabled  bool
 }
 
 func main() {
@@ -61,25 +58,26 @@ func main() {
 		ResponseTime:       time.Duration(0),
 		ResolvedIP:         server,
 		IssuedOrganization: IsEmpty(cert.Subject.Organization),
-		// IssuerCountry:      cert.Subject.Country[0],
+		IssuerCountry:      cert.Issuer.Country[0],
 
 		IssuerCN:           cert.Issuer.CommonName,
 		IssuerOrganization: cert.Issuer.Organization[0],
 		CertSN:             cert.SerialNumber.String(),
 		CertSHA1:           fmt.Sprintf("%x", cert.SignatureAlgorithm.String()),
+		CertAlgorithm:      cert.SignatureAlgorithm.String(),
+		CertVersion:        cert.Version,
+		CertSANs:           cert.DNSNames,
+		CertExpired:        cert.NotAfter.Before(time.Now()),
+		CertValid:          cert.NotBefore.Before(time.Now()) && cert.NotAfter.After(time.Now()),
+		ValidFrom:          cert.NotBefore.Format("02.01.2006"),
+		ValidUntil:         cert.NotAfter.Format("02.01.2006"),
+		ValidityDays:       int(cert.NotAfter.Sub(cert.NotBefore).Hours() / 24),
+		DaysLeft:           int(cert.NotAfter.Sub(time.Now()).Hours() / 24),
+		ValidDaysToExpire:  int(cert.NotAfter.Sub(time.Now()).Hours() / 24),
 	}
-	fingerprint := md5.Sum(cert.Raw)
 
-	var buf bytes.Buffer
-	for i, f := range fingerprint {
-		if i > 0 {
-			fmt.Fprintf(&buf, ":")
-		}
-		fmt.Fprintf(&buf, "%02X", f)
-	}
-	fmt.Printf("Fingerprint for  %s", buf.String())
+	fmt.Println(CertInfo.IssuedOrganization)
 
-	fmt.Println(CertInfo.CertSHA1)
 }
 
 func getCert(server, hostname string) (*x509.Certificate, error) {
